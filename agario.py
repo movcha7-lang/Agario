@@ -9,15 +9,15 @@ STEP = 2
 
 class Player:
     def __init__(self, color):
+        self.color = color
         self.area = pygame.Surface((20,20))
         self.x = 250
         self.y = 250
-        self.hp = 100
-        pygame.draw.circle(self.area, color, (10,10), 10)
+        self.hp = 10
 
 
     def movemment(self,screen):
-        screen.blit(self.area, (self.x,self.y))
+        pygame.draw.circle(screen, self.color, (self.x, self.y), (self.hp))
 
 
 class Food:
@@ -61,12 +61,13 @@ class Game:
             self.clock.tick(60)
             pygame.display.flip()
     def update(self):
+        self.screen.fill("black")
         keys = pygame.key.get_pressed()
         d_x, d_y = 0,0
         if keys[pygame.K_w] or keys[pygame.K_UP]:
-            d_y -=1
-        if keys[pygame.K_s] or keys[pygame.K_DOWN]:
             d_y +=1
+        if keys[pygame.K_s] or keys[pygame.K_DOWN]:
+            d_y -=1
         if keys[pygame.K_a] or keys[pygame.K_LEFT]:
             d_x +=1
         if keys[pygame.K_d] or keys[pygame.K_RIGHT]:
@@ -74,11 +75,25 @@ class Game:
         self.food.move(d_x, d_y)
         self.food.update(self.screen)
         self.player.movemment(self.screen)
-                        
+        eaten = []
+        for food in self.food.foodlist:
+            h = ((self.player.x - food.x)**2 + (self.player.y - food.y)**2)**(1/2)
+            if h < self.player.hp + food.hp:
+                self.player.hp +=2
+                eaten.append(food)
+                
+        
+        for food in eaten:
+            self.food.foodlist.remove(food)
+            self.food.foodlist.append(Player(random.choice(COLORS)))
+            self.food.foodlist[-1].x = random.randint(-1000, 1500)
+            self.food.foodlist[-1].y = random.randint(-1000, 1500)
+
     def newgame(self):
         self.player = Player(random.choice(COLORS))
         self.food = Food()
         self.state = 1
+        
 
 
 game = Game()
