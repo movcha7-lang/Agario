@@ -7,6 +7,20 @@ WIDTH, HEIGHT = 700, 700
 COLORS = ["#36cf4a", "#36cfcf", "#7336cf", "#cf3661", "#cfc236", "#3e36cf"]
 STEP = 2
 
+
+class Field:
+    def __init__(self):
+        self.size = 2500
+        self.x = -1000
+        self.y = -1000
+        
+    def update(self, screen, d_x, d_y):
+        self.x += d_x
+        self.y += d_y
+        pygame.draw.line(screen, "white", (self.x, self.y), (self.x, self.y + self.size))
+        pygame.draw.line(screen, "white", (self.x + self.size, self.y), (self.x + self.size, self.y + self.size))
+        pygame.draw.line(screen, "white", (self.x,  self.y), (self.x + self.size, self.y))
+        pygame.draw.line(screen, "white", (self.x, self.y + self.size), (self.x + self.size, self.y + self.size))
 class Player:
     def __init__(self, color):
         self.color = color
@@ -32,6 +46,7 @@ class Food:
     def update(self, screen):
         for e in self.foodlist:
             e.movemment(screen)
+
 
 
     def move(self, d_x, d_y):
@@ -75,6 +90,7 @@ class Game:
         self.food.move(d_x, d_y)
         self.food.update(self.screen)
         self.player.movemment(self.screen)
+        self.field.update(self.screen, d_x, d_y)
         eaten = []
         for food in self.food.foodlist:
             h = ((self.player.x - food.x)**2 + (self.player.y - food.y)**2)**(1/2)
@@ -93,6 +109,7 @@ class Game:
         self.player = Player(random.choice(COLORS))
         self.food = Food()
         self.state = 1
+        self.field = Field()
         
 
 
