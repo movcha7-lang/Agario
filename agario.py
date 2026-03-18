@@ -87,10 +87,17 @@ class Game:
             d_x +=1
         if keys[pygame.K_d] or keys[pygame.K_RIGHT]:
             d_x -=1
-        self.food.move(d_x, d_y)
+        
+        if self.player.x - d_x > self.field.x and self.player.x - d_x < self.field.x + self.field.size and\
+              self.player.y - d_y > self.field.y and self.player.y - d_y < self.field.y + self.field.size:
+            self.field.update(self.screen, d_x, d_y)
+            self.food.move(d_x, d_y)
+
+
+            
         self.food.update(self.screen)
         self.player.movemment(self.screen)
-        self.field.update(self.screen, d_x, d_y)
+        
         eaten = []
         for food in self.food.foodlist:
             h = ((self.player.x - food.x)**2 + (self.player.y - food.y)**2)**(1/2)
