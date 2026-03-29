@@ -4,7 +4,7 @@ import random
 import time 
 
 HOST = "0.0.0.0"
-PORT = 88888
+PORT = 8888
 COLORS = ["#36cf4a", "#36cfcf", "#7336cf", "#cf3661", "#cfc236", "#3e36cf"]
 FOODCOUNT = random.randint(40,100)
 clients = {}
@@ -15,6 +15,8 @@ nextid = 0
 
 def pack(ourlist):
     return (",".join(str(el) for el in ourlist)).encode()
+
+
 
 def broadcast(row):
     row = pack(row)
@@ -59,6 +61,8 @@ def handle(sock, id):
                     players[id][2] += players[int(info[1])]
                     try:
                         clients[int(info[1])].sendall(pack("eaten"))
+                    except:
+                        pass
                     clients.pop(int(info[1]), None)
                     players.pop(int(info[1]), None)
                     print(f"player {id} ate {int(info[1])}")
@@ -87,10 +91,13 @@ def main():
     server.listen()
     print("Server is on")
 
-    threading.Thread(target = ticker, daemon = True).start()
+    threading.Thread(target = tracker, daemon = True).start()
     while running:
         try:
+            
             sock, address = server.accept()
+        except:
+            pass
         id = nextid
         nextid += 1
         clients[id] = sock 
