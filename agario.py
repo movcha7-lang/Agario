@@ -34,10 +34,11 @@ class Net:
                 self.commands += self.sock.recv(1024) + b"\n"
         except:
             pass
-    self.command_list = []
-    while self.commands:
-        line,self.commands = self.commands.split(b"\n",1)
-        self.command_list.append(unpack(line))
+        self.command_list = []
+        while self.commands:
+            line,self.commands = self.commands.split(b"\n",1)
+            self.command_list.append(unpack(line))
+        return self.command_list
 
     
 
@@ -97,7 +98,7 @@ class Game:
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
         self.clock = pygame.time.Clock()
         self.net = Net()
-        self.playerid
+        self.playerid = None
         self.others = {}
         self.newgame()
     def run(self):

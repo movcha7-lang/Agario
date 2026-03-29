@@ -8,7 +8,7 @@ PORT = 8888
 COLORS = ["#36cf4a", "#36cfcf", "#7336cf", "#cf3661", "#cfc236", "#3e36cf"]
 FOODCOUNT = random.randint(40,100)
 clients = {}
-player = {}
+players = {}
 food = []
 running = True
 nextid = 0
@@ -22,7 +22,7 @@ def broadcast(row):
     row = pack(row)
     left = []
     for sock, address in clients.items():
-        try:
+        try: 
             address.sendall(row)
         except: 
             left.append(sock)
@@ -83,7 +83,7 @@ def tracker():
 def main():
     global food, nextid
     food = [(random.randint(-1000, 1500),random.randint(-1000, 1500),random.choice(COLORS), 10) for e in range(FOODCOUNT)]
-    food_str = ["food"] + [el for f in food for el in f]
+    food_str = pack(["food"] + [el for f in food for el in f])
     server =  socket.socket()
     server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
