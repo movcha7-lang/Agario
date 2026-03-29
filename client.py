@@ -1,48 +1,49 @@
 import pygame
 import random
 import math
-import socket 
+import socket
 
 
 WIDTH, HEIGHT = 700, 700
 COLORS = ["#36cf4a", "#36cfcf", "#7336cf", "#cf3661", "#cfc236", "#3e36cf"]
 STEP = 2
+
 HOST = "127.0.0.1"
 PORT = 8888
 
-def pack(ourlist):
-    return (",".join(str(el) for el in ourlist)).encode()
 
-def unpack(notourlist):
-    return notourlist.decode().strip().split(",")
+def pack(row):
+    return (",".join(str(v) for v in row) + "\n").encode()
+
+def unpack(line):
+    return line.decode().strip().split(",")
 
 class Net:
     def __init__(self):
         self.sock = socket.socket()
         self.sock.connect((HOST, PORT))
         self.sock.setblocking(False)
-        self.commands = b""
+        self.buf = b""
 
-    def send(self, *text):
-        try: 
-            self.sock.sendall(pack(text))
-        except: 
+    def send(self, *fields):
+        try:
+            self.sock.sendall(pack(fields))
+        except Exception:
             pass
+
     def recv(self):
-        try: 
-            self.commands += self.sock.recv(4096) 
-        except:
+        try:
+            while True:
+                self.buf += self.sock.recv(4096)
+        except BlockingIOError:
             pass
-        self.command_list = []
-        while b"\n" in self.commands: 
-            line, self.commands = self.commands.split(b"\n", 1)
-            if line:
-                self.command_list.append(unpack(line))
-        return self.command_list
-
-    
-
-
+        except Exception:
+            return []
+        msgs = []
+        while b"\n" in self.buf:
+            line, self.buf = self.buf.split(b"\n", 1)
+            msgs.append(unpack(line))
+        return msgs
 
 
 class Field:
@@ -50,14 +51,20 @@ class Field:
         self.size = 2500
         self.x = -1000
         self.y = -1000
-        
+
     def update(self, screen, d_x, d_y):
         self.x += d_x
         self.y += d_y
-        pygame.draw.line(screen, "white", (self.x, self.y), (self.x, self.y + self.size))
-        pygame.draw.line(screen, "white", (self.x + self.size, self.y), (self.x + self.size, self.y + self.size))
-        pygame.draw.line(screen, "white", (self.x,  self.y), (self.x + self.size, self.y))
-        pygame.draw.line(screen, "white", (self.x, self.y + self.size), (self.x + self.size, self.y + self.size))
+        pygame.draw.line(screen, "white",
+                        (self.x, self.y), (self.x, self.y + self.size))
+        pygame.draw.line(screen, "white",
+                        (self.x + self.size, self.y), (self.x + self.size, self.y + self.size))
+        pygame.draw.line(screen, "white",
+                        (self.x,  self.y), (self.x + self.size, self.y))
+        pygame.draw.line(screen, "white",
+                        (self.x, self.y + self.size), (self.x + self.size, self.y + self.size))
+
+
 class Player:
     def __init__(self, color):
         self.color = color
@@ -66,25 +73,21 @@ class Player:
         self.y = 250
         self.hp = 10
 
-
     def movemment(self,screen):
         pygame.draw.circle(screen, self.color, (self.x, self.y), (self.hp))
 
 
 class Food:
     def __init__(self):
-        self.foodlist =  []
+        self.foodlist = []
         for e in range(random.randint(40, 100)):
             self.foodlist.append(Player(random.choice(COLORS)))
             self.foodlist[-1].x = random.randint(-1000, 1500)
             self.foodlist[-1].y = random.randint(-1000, 1500)
 
-
     def update(self, screen):
         for e in self.foodlist:
             e.movemment(screen)
-
-
 
     def move(self, d_x, d_y):
         for e in self.foodlist:
@@ -98,9 +101,10 @@ class Game:
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
         self.clock = pygame.time.Clock()
         self.net = Net()
-        self.playerid = None
+        self.my_id = None
         self.others = {}
         self.newgame()
+
     def run(self):
         while True:
             for e in pygame.event.get():
@@ -111,56 +115,56 @@ class Game:
                         pygame.quit()
                     if e.key == pygame.K_SPACE and not self.state:
                         self.newgame()
-            for command in self.net.recv():
-                name = command[0]
-                if name == "init":
-                    self.playerid = int(command[1])
-                elif name == "food":
-                    self.food.foodlist = []
-                    i = 1 
-                    while i + 3 < len(command):
-                        p = Player(command[i +2])
-                        p.x = float(command[i]) + self.field.x + 1000
-                        p.y = float(command[i + 1]) + self.field.y + 1000
-                        p.hp = int(command[i + 3])
-                        i += 4
-                        self.food.foodlist.append(p)
-                elif name == "food_update":
-                    n = int(command[1])
-                    if 0 <= n < len(self.food.foodlist):
-                        f = self.food.foodlist[n]
-                        f.x = float(command[2]) + self.field.x + 1000
-                        f.y = float(command[3]) + self.field.y + 1000
-                        f.color = command[4]
-                        f.hp = int(command[5])
-                elif name == "eaten":
-                    self.state = 0
-                elif name == "state":
-                    new_others = {}
-                    j = 1
-                    while j +4 <= len(command):
-                        id = int(command[j])
-                        if self.playerid != id:
-                            p = self.others.get(id, Player(command[j + 4]))
-                            p.x = float(command[j +1]) + self.field.x + 1000
-                            p.y = float(command[j +2]) + self.field.y + 1000
-                            p.hp = int(command[j + 3])
-                            p.color = command[j +4]
-                            new_others[id] = p
-                            j += 5
-                        self.others = new_others
-                             
 
-                            
+            for fields in self.net.recv():
+                t = fields[0]
+                if t == "init":
+                    self.my_id = int(fields[1])
+                elif t == "food":
+                    self.food.foodlist = []
+                    i = 1
+                    while i + 3 < len(fields):
+                        p = Player(fields[i+2])
+                        p.x = float(fields[i]) + self.field.x + 1000
+                        p.y = float(fields[i+1]) + self.field.y + 1000
+                        p.hp = int(fields[i+3])
+                        self.food.foodlist.append(p)
+                        i += 4
+                elif t == "foodupdate":
+                    idx = int(fields[1])
+                    if 0 <= idx < len(self.food.foodlist):
+                        p = self.food.foodlist[idx]
+                        p.x = float(fields[2]) + self.field.x + 1000
+                        p.y = float(fields[3]) + self.field.y + 1000
+                        p.color = fields[4]
+                        p.hp = int(fields[5])
+                elif t == "state":
+                    new_others = {}
+                    i = 1
+                    while i + 4 < len(fields):
+                        pid = int(fields[i])
+                        if pid != self.my_id:
+                            p = self.others.get(pid, Player(fields[i+4]))
+                            p.x = float(fields[i+1]) + self.field.x + 1000
+                            p.y = float(fields[i+2]) + self.field.y + 1000
+                            p.hp = int(fields[i+3])
+                            p.color = fields[i+4]
+                            new_others[pid] = p
+                        i += 5
+                    self.others = new_others
+                elif t == "killed" or t == "shutdown":
+                    self.state = 0
 
             if self.state:
                 self.update()
             self.clock.tick(60)
             pygame.display.flip()
+
     def update(self):
         self.screen.fill("black")
         keys = pygame.key.get_pressed()
         d_x, d_y = 0,0
+
         if keys[pygame.K_w] or keys[pygame.K_UP]:
             d_y +=1
         if keys[pygame.K_s] or keys[pygame.K_DOWN]:
@@ -169,30 +173,28 @@ class Game:
             d_x +=1
         if keys[pygame.K_d] or keys[pygame.K_RIGHT]:
             d_x -=1
-        
-        if self.player.x - d_x > self.field.x and self.player.x - d_x < self.field.x + self.field.size and\
-              self.player.y - d_y > self.field.y and self.player.y - d_y < self.field.y + self.field.size:
-            self.field.update(self.screen, d_x, d_y)
+
+        if 0 < (self.player.x - d_x) - self.field.x < self.field.size \
+            and 0 < (self.player.y - d_y) - self.field.y < self.field.size:
             self.food.move(d_x, d_y)
+            self.field.update(self.screen, d_x, d_y)
             for p in self.others.values():
                 p.x += d_x
                 p.y += d_y
 
-
-            
-        self.food.update(self.screen)
         self.player.movemment(self.screen)
+        self.food.update(self.screen)
+
         for p in self.others.values():
             p.movemment(self.screen)
-        
+
         eaten = []
         for food in self.food.foodlist:
             h = ((self.player.x - food.x)**2 + (self.player.y - food.y)**2)**(1/2)
             if h < self.player.hp + food.hp:
                 self.player.hp +=2
                 eaten.append(food)
-                
-        
+
         for food in eaten:
             idx = self.food.foodlist.index(food)
             self.food.foodlist.remove(food)
@@ -208,14 +210,12 @@ class Game:
         world_y = self.player.y - self.field.y - 1000
         self.net.send("move", round(world_x, 1), round(world_y, 1), self.player.hp)
 
-
     def newgame(self):
         self.player = Player(random.choice(COLORS))
         self.food = Food()
         self.state = 1
         self.field = Field()
         self.others = {}
-        
 
 
 game = Game()

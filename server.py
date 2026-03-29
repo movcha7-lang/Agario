@@ -1,111 +1,128 @@
-import socket
-import threading
-import random
-import time 
+import socket, threading, random, time
 
 HOST = "0.0.0.0"
 PORT = 8888
 COLORS = ["#36cf4a", "#36cfcf", "#7336cf", "#cf3661", "#cfc236", "#3e36cf"]
-FOODCOUNT = random.randint(40,100)
-clients = {}
-players = {}
-food = []
+FIELD_SIZE = 2500
+FOOD_COUNT = 80
+
+clients = {}   # id -> socket
+players = {}   # id -> [x, y, hp, color]
+food    = []   # [[x, y, color, hp], ...]
+next_id = 0
+lock = threading.Lock()
 running = True
-nextid = 0
-
-def pack(ourlist):
-    return (",".join(str(el) for el in ourlist)).encode()
 
 
+def pack(row):
+    return (",".join(str(v) for v in row) + "\n").encode()
+
+def make_food_item():
+    return [random.randint(0, FIELD_SIZE), random.randint(0, FIELD_SIZE),
+            random.choice(COLORS), 5]
+
+def gen_food():
+    global food
+    food = [make_food_item() for _ in range(FOOD_COUNT)]
 
 def broadcast(row):
-    row = pack(row) +b"\n"
-    left = []
-    for sock, address in clients.items():
-        try: 
-            address.sendall(row)
-        except: 
-            left.append(sock)
-    for sock in left:
-        clients.pop(sock)
-        players.pop(sock)
+    data = pack(row)
+    dead = []
+    for pid, sock in clients.items():
+        try:
+            sock.sendall(data)
+        except Exception:
+            dead.append(pid)
+    for pid in dead:
+        clients.pop(pid, None)
+        players.pop(pid, None)
 
 
-
-def handle(sock, id):
-    allclientsinfo = b""
+def handle(sock, pid):
+    buf = b""
     while running:
         try:
-            clientinfo = sock.recv(1024)
-            if not clientinfo:
+            chunk = sock.recv(4096)
+            if not chunk:
                 break
-            allclientsinfo += clientinfo
-        except:
+            buf += chunk
+        except Exception:
             break
-        while allclientsinfo:
-            line, other = allclientsinfo.split(b"\n", 1)
-            info = line.decode().strip().split(",") 
-            if info[0] == "move":
-                p = players.get(id)
-                if p:
-                    p[0] = float(info[1])
-                    p[1] = float(info[2])
-                    p[2] = float(info[3])
-            elif info[0] == "eat":
-                if 0 <= int(info[1]) < len(food):
-                    f = (random.randint(-1000, 1500),random.randint(-1000, 1500),random.choice(COLORS), 10)
-                    food[int(info[1])] = f
-                    broadcast(["food_update", int(info[1]), f[0], f[1], f[2], f[3]])
-            elif info[0] == "eatplayer":
-                if int(info[1]) in players and id in players:
-                    players[id][2] += players[int(info[1])][2]
-                    try:
-                        clients[int(info[1])].sendall(pack(["eaten"])+b"\n")
-                    except:
-                        pass
-                    clients.pop(int(info[1]), None)
-                    players.pop(int(info[1]), None)
-                    print(f"player {id} ate {int(info[1])}")
-    clients.pop(id, None)
-    players.pop(id, None)
+
+        while b"\n" in buf:
+            line, buf = buf.split(b"\n", 1)
+            fields = line.decode().strip().split(",")
+
+            with lock:
+                if fields[0] == "move" and len(fields) == 4:
+                    p = players.get(pid)
+                    if p:
+                        p[0] = float(fields[1])
+                        p[1] = float(fields[2])
+                        p[2] = int(fields[3])
+
+                elif fields[0] == "eat" and len(fields) == 2:
+                    idx = int(fields[1])
+                    if 0 <= idx < len(food):
+                        food[idx] = make_food_item()
+                        f = food[idx]
+                        broadcast(["foodupdate", idx, f[0], f[1], f[2], f[3]])
+
+                elif fields[0] == "eatplayer" and len(fields) == 2:
+                    target = int(fields[1])
+                    if target in players and pid in players:
+                        players[pid][2] += players[target][2] // 2
+                        try:
+                            clients[target].sendall(pack(["killed"]))
+                        except Exception:
+                            pass
+                        clients.pop(target, None)
+                        players.pop(target, None)
+                        print(f"[!] player {pid} ate player {target}")
+
+    with lock:
+        clients.pop(pid, None)
+        players.pop(pid, None)
     sock.close()
-    print(f"player {id} left the game")
-    
+    print(f"[-] player {pid} left  ({len(clients)} online)")
 
 
-
-def tracker():
+def ticker():
     while running:
-        time.sleep(0.05)
-        row = ["state"] + [el for id,p in players.items() for el in [id] + p]
-        broadcast(row)
+        time.sleep(1 / 20)
+        with lock:
+            row = ["state"] + [v for pid, p in players.items() for v in [pid] + p]
+            broadcast(row)
+
 
 def main():
-    global food, nextid
-    food = [(random.randint(-1000, 1500),random.randint(-1000, 1500),random.choice(COLORS), 10) for e in range(FOODCOUNT)]
-    food_str = pack(["food"] + [el for f in food for el in f])
-    server =  socket.socket()
-    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    gen_food()
+    food_flat = ["food"] + [v for f in food for v in f]
 
+    server = socket.socket()
+    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server.bind((HOST, PORT))
     server.listen()
-    print("Server is on")
+    print(f"Server running on port {PORT}  (type 'quit' to stop)")
 
-    threading.Thread(target = tracker, daemon = True).start()
+    threading.Thread(target=ticker, daemon=True).start()
+
+    global next_id
     while running:
         try:
-            
-            sock, address = server.accept()
-        except:
-            pass
-        id = nextid
-        nextid += 1
-        clients[id] = sock 
-        players[id] = [random.randint(200, 700), random.randint(200, 700),
-                       10, random.choice(COLORS)]
-        sock.sendall(pack(["init", id])+b"\n")
-        sock.sendall(food_str +b"\n") 
-        print(f"player {id} has joined the game.")
-        
-        threading.Thread(target = handle, args = (sock, id), daemon = True).start()
+            sock, addr = server.accept()
+        except Exception:
+            break
+        with lock:
+            pid = next_id
+            next_id += 1
+            clients[pid] = sock
+            players[pid] = [random.randint(200, 800), random.randint(200, 800),
+                            10, random.choice(COLORS)]
+            sock.sendall(pack(["init", pid, FIELD_SIZE]))
+            sock.sendall(pack(food_flat))
+        print(f"[+] player {pid} joined  ({len(clients)} online)")
+        threading.Thread(target=handle, args=(sock, pid), daemon=True).start()
+
+
 main()
