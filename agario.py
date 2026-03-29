@@ -31,7 +31,7 @@ class Net:
     def recv(self):
         try: 
             while True: 
-                self.commands += self.sock.recv(1024) + b"\n"
+                self.commands += self.sock.recv(1024)
         except:
             pass
         self.command_list = []
@@ -138,7 +138,7 @@ class Game:
                 elif name == "state":
                     new_others = {}
                     j = 1
-                    while j +4 < len(command):
+                    while j +4 <= len(command):
                         id = int(command[j])
                         if self.playerid != id:
                             p = self.others.get(id, Player(command[j + 4]))
@@ -147,8 +147,9 @@ class Game:
                             p.hp = int(command[j + 3])
                             p.color = command[j +4]
                             new_others[id] = p
+                            j += 5
                         self.others = new_others
-                        j += 5 
+                             
 
                             
 

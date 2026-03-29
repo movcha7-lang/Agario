@@ -19,7 +19,7 @@ def pack(ourlist):
 
 
 def broadcast(row):
-    row = pack(row)
+    row = pack(row) +b"\n"
     left = []
     for sock, address in clients.items():
         try: 
@@ -42,7 +42,7 @@ def handle(sock, id):
             allclientsinfo += clientinfo
         except:
             break
-        while allclientinfo:
+        while allclientsinfo:
             line, other = allclientsinfo.split(b"\n", 1)
             info = line.decode().strip().split(",") 
             if info[0] == "move":
@@ -58,9 +58,9 @@ def handle(sock, id):
                     broadcast(["food_update", int(info[1]), f[0], f[1], f[2], f[3]])
             elif info[0] == "eatplayer":
                 if int(info[1]) in players and id in players:
-                    players[id][2] += players[int(info[1])]
+                    players[id][2] += players[int(info[1])][2]
                     try:
-                        clients[int(info[1])].sendall(pack("eaten"))
+                        clients[int(info[1])].sendall(pack(["eaten"])+b"\n")
                     except:
                         pass
                     clients.pop(int(info[1]), None)
@@ -103,8 +103,8 @@ def main():
         clients[id] = sock 
         players[id] = [random.randint(200, 700), random.randint(200, 700),
                        10, random.choice(COLORS)]
-        sock.sendall(pack(["init", id]))
-        sock.sendall(food_str)
+        sock.sendall(pack(["init", id])+b"\n")
+        sock.sendall(food_str +b"\n") 
         print(f"player {id} has joined the game.")
         
         threading.Thread(target = handle, args = (sock, id), daemon = True).start()
